@@ -67,8 +67,8 @@ const createUser = async ({ email, password, role, divisionId, employeeId, isAct
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await query(
-        `INSERT INTO accounts (email, password_hash, role, division_id, employee_id, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO accounts (email, password_hash, role, division_id, employee_id, is_active, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
          RETURNING account_id, email, role, division_id, employee_id, is_active, created_at`,
         [email, passwordHash, role, divisionId || null, employeeId || null, isActive]
     );
