@@ -115,12 +115,23 @@ const getMobileSession = async (accessSeed) => {
                 e.access_end_time,
                 e.is_active,
                 e.granted_by_account_id,
-                a.email AS granted_by_email
+                a.email AS granted_by_email,
+                COALESCE(
+                    json_agg(
+                        json_build_object('employeeId', c.employee_id, 'firstName', c.first_name, 'lastName', c.last_name)
+                    ) FILTER (WHERE c.employee_id IS NOT NULL),
+                    '[]'
+                ) AS colleagues
          FROM smartphones s
          INNER JOIN employees e ON e.employee_id = s.employee_id
          INNER JOIN divisions d ON d.division_id = e.division_id
          LEFT JOIN accounts a ON a.account_id = e.granted_by_account_id
-         WHERE s.access_seed = $1`,
+         LEFT JOIN employees c ON c.division_id = e.division_id AND c.employee_id != e.employee_id AND c.is_active = true
+         WHERE s.access_seed = $1
+         GROUP BY s.smartphone_id, s.platform, s.device_identifier, s.is_trusted, s.registered_at,
+                  e.employee_id, e.first_name, e.last_name, e.photo_url, e.badge_code,
+                  e.division_id, d.name, e.bluetooth_code, e.car_number, e.access_start_time,
+                  e.access_end_time, e.is_active, e.granted_by_account_id, a.email`,
         [accessSeed]
     );
 
@@ -156,7 +167,11 @@ const getMe = async ({ accessSeed }) => {
             accessEndTime: session.access_end_time,
             isActive: session.is_active,
             grantedByAccountId: session.granted_by_account_id,
-            grantedByEmail: session.granted_by_email
+            grantedByEmail: session.granted_by_email,
+            colleagues: (session.colleagues || []).map((c) => ({
+                employeeId: c.employeeId,
+                name: `${c.firstName} ${c.lastName}`
+            }))
         }
     };
 };
