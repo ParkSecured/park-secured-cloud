@@ -21,7 +21,7 @@ const toEmployeeResponse = (employee) => ({
 });
 
 const getDivisionFilter = (user, firstParamIndex = 1) => {
-    if (user.role === ROLES.DIVISION_MANAGER || user.role === ROLES.OPERATOR || user.role === ROLES.VIEWER) {
+    if (user.role === ROLES.DIVISION_MANAGER || user.role === ROLES.VIEWER) {
         return {
             clause: ` WHERE e.division_id = $${firstParamIndex}`,
             params: [user.divisionId]
