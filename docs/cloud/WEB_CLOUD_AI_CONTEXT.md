@@ -151,13 +151,19 @@ Doar citire.
 Render:
 
 ```text
-https://park-secured-cloud.onrender.com/api
+https://park-secured-cloud-r62j.onrender.com/api
 ```
 
 Swagger:
 
 ```text
-https://park-secured-cloud.onrender.com/api/docs
+https://park-secured-cloud-r62j.onrender.com/api/docs
+```
+
+Frontend Render:
+
+```text
+https://park-secure-vrxr.onrender.com/
 ```
 
 ## LOGIN WEB

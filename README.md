@@ -3,6 +3,16 @@
 Backend REST pentru modulul cloud ParkSecure: utilizatori si roluri, angajati,
 asociere unica angajat-smartphone, evenimente de acces si rapoarte.
 
+## Live deployment
+
+```text
+API base URL: https://park-secured-cloud-r62j.onrender.com/api
+API docs:     https://park-secured-cloud-r62j.onrender.com/api/docs
+Frontend:     https://park-secure-vrxr.onrender.com/
+```
+
+This service is the single API used by the web dashboard, mobile app and embedded gate firmware.
+
 ## Database
 
 The backend uses PostgreSQL. Create the schema with:

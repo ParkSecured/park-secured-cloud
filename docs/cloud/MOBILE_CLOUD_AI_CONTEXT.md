@@ -112,7 +112,7 @@ Cand seed-ul este validat, cloud scrie eveniment in `access_events`.
 Base URL Render:
 
 ```text
-https://park-secured-cloud.onrender.com/api
+https://park-secured-cloud-r62j.onrender.com/api
 ```
 
 ### 1. MOBILE LOGIN SECURE
