@@ -47,23 +47,45 @@ const loginSecure = async ({ email, password, platform, deviceIdentifier }) => {
     );
 
     const existingDevice = existingDeviceResult.rows[0];
-    const isNewDevice = existingDevice && existingDevice.device_identifier !== deviceIdentifier;
 
-    // șterge device-ul vechi și înregistrează cel nou
+    // Dacă există un device diferit → cerere de schimbare, nu înlocuire directă
+    if (existingDevice && existingDevice.device_identifier !== deviceIdentifier) {
+        const oldDeviceIdentifier = existingDevice.device_identifier;
+
+        // Verifică dacă există deja o cerere pending pentru acest angajat
+        const existingRequest = await query(
+            `SELECT request_id FROM device_change_requests
+             WHERE employee_id = $1 AND status = 'pending'`,
+            [account.employee_id]
+        );
+
+        if (existingRequest.rows.length === 0) {
+            await query(
+                `INSERT INTO device_change_requests (employee_id, old_device_identifier, new_device_identifier, new_platform, status)
+                 VALUES ($1, $2, $3, $4, 'pending')`,
+                [account.employee_id, oldDeviceIdentifier, deviceIdentifier, platform || 'mobile']
+            );
+        }
+
+        const error = new Error('Există deja un dispozitiv înregistrat pentru acest cont. Cererea de schimbare a fost trimisă către HR.');
+        error.statusCode = 403;
+        throw error;
+    }
+
+    // Nu există device sau e același device → înregistrare normală
     await query(
         `DELETE FROM smartphones WHERE employee_id = $1 OR device_identifier = $2`,
         [account.employee_id, deviceIdentifier]
     );
 
-await query(
-    `INSERT INTO smartphones (employee_id, platform, device_identifier, access_seed, is_trusted)
-     VALUES ($1, $2, $3, $4, true)`,
-    [account.employee_id, platform || 'mobile', deviceIdentifier, accessSeed]
-);
+    await query(
+        `INSERT INTO smartphones (employee_id, platform, device_identifier, access_seed, is_trusted)
+         VALUES ($1, $2, $3, $4, true)`,
+        [account.employee_id, platform || 'mobile', deviceIdentifier, accessSeed]
+    );
 
     return {
         accessSeed,
-        isNewDevice: !!isNewDevice, // trimitem înapoi dacă e sau nu dispozitiv nou
         user: {
             accountId: account.account_id,
             employeeId: account.employee_id,
