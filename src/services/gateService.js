@@ -123,7 +123,18 @@ const getGateStatus = async () => {
 const POLL_INTERVAL_MS = 1000;  // verifică rezolvarea la fiecare 1s
 const POLL_TIMEOUT_MS  = 60000; // timeout după 60s (același ca la accessSeed)
 
-const validateBluetooth = async (bluetoothCode) => {
+const validateBluetooth = async (bluetoothCode, direction = 'ENTRY') => {
+    // Parsează direcția din codul BLE dacă e în formatul "COD:ENTRY" sau "COD:EXIT"
+    let actualCode = bluetoothCode;
+    let eventType = direction === 'EXIT' ? 'EXIT' : 'ENTRY';
+    const colonIndex = bluetoothCode.lastIndexOf(':');
+    if (colonIndex !== -1) {
+        const suffix = bluetoothCode.slice(colonIndex + 1).toUpperCase();
+        if (suffix === 'ENTRY' || suffix === 'EXIT') {
+            actualCode = bluetoothCode.slice(0, colonIndex);
+            eventType = suffix;
+        }
+    }
     // Găsește angajatul activ cu acest cod bluetooth
     const employeeResult = await query(
         `SELECT e.employee_id,
@@ -136,7 +147,7 @@ const validateBluetooth = async (bluetoothCode) => {
          FROM employees e
          WHERE e.bluetooth_code = $1
            AND e.is_active = true`,
-        [bluetoothCode]
+        [actualCode]
     );
 
     const employee = employeeResult.rows[0];
@@ -169,8 +180,8 @@ const validateBluetooth = async (bluetoothCode) => {
         await query(
             `INSERT INTO access_events
                 (employee_id, event_type, event_status, source, notes)
-             VALUES ($1, 'ENTRY', 'ALLOWED', 'bluetooth', null)`,
-            [employee.employee_id]
+             VALUES ($1, $2, 'ALLOWED', 'bluetooth', null)`,
+            [employee.employee_id, eventType]
         );
 
         return {
@@ -185,9 +196,9 @@ const validateBluetooth = async (bluetoothCode) => {
     const insertResult = await query(
         `INSERT INTO access_events
             (employee_id, event_type, event_status, source, notes)
-         VALUES ($1, 'ENTRY', 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
+         VALUES ($1, $2, 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
          RETURNING event_id`,
-        [employee.employee_id]
+        [employee.employee_id, eventType]
     );
 
     const eventId = insertResult.rows[0].event_id;
