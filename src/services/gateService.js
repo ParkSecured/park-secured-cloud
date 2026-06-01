@@ -162,6 +162,7 @@ const validateBluetooth = async (bluetoothCode) => {
         employee.access_start_time,
         employee.access_end_time
     );
+    console.log("withinSchedule:", withinSchedule, "start:", employee.access_start_time, "end:", employee.access_end_time, "now:", new Date().toTimeString());
 
     // Dacă e în interval — acces direct ALLOWED
     if (withinSchedule) {
