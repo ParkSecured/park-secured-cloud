@@ -29,17 +29,17 @@ const getDivisionReport = async (divisionId, user) => {
 
     const result = await query(
         `SELECT
-            e.division_id,
+            d.division_id,
             d.name AS division_name,
             COUNT(ae.event_id)::int AS total_events,
-            COUNT(*) FILTER (WHERE ae.event_status = 'ALLOWED')::int AS allowed_events,
-            COUNT(*) FILTER (WHERE ae.event_status = 'DENIED')::int AS denied_events,
+            COUNT(ae.event_id) FILTER (WHERE ae.event_status = 'ALLOWED')::int AS allowed_events,
+            COUNT(ae.event_id) FILTER (WHERE ae.event_status = 'DENIED')::int AS denied_events,
             COUNT(DISTINCT ae.employee_id)::int AS employees_with_events
-         FROM employees e
-         INNER JOIN divisions d ON d.division_id = e.division_id
+         FROM divisions d
+         LEFT JOIN employees e ON e.division_id = d.division_id
          LEFT JOIN access_events ae ON ae.employee_id = e.employee_id
-         WHERE e.division_id = $1${roleScope}
-         GROUP BY e.division_id, d.name`,
+         WHERE d.division_id = $1${roleScope}
+         GROUP BY d.division_id, d.name`,
         params
     );
 
