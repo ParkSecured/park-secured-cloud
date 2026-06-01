@@ -128,7 +128,7 @@ const resolveAccessEvent = async (req, res) => {
     }
 
     try {
-        const event = await accessEventService.resolveAccessEvent(Number(eventId), resolution);
+        const event = await accessEventService.resolveAccessEvent(Number(eventId), resolution, req.user?.accountId);
         return res.status(200).json({ success: true, data: event });
     } catch (error) {
         return sendControllerError(res, error, 'Could not resolve access event');

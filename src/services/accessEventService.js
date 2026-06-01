@@ -11,7 +11,8 @@ const toEventResponse = (event) => ({
     gateCode: event.gate_code,
     source: event.source,
     notes: event.notes,
-    resolvedAt: event.resolved_at
+    resolvedAt: event.resolved_at,
+    resolvedByName: event.resolved_by_name || null
 });
 
 const getAccessScope = (user, startIndex = 1) => {
@@ -300,7 +301,7 @@ const getPendingEvent = async (eventId) => {
     };
 };
 
-const resolveAccessEvent = async (eventId, resolution) => {
+const resolveAccessEvent = async (eventId, resolution, resolvedByAccountId) => {
     if (!['ALLOWED', 'DENIED'].includes(resolution)) {
         const error = new Error('resolution must be ALLOWED or DENIED');
         error.statusCode = 400;
@@ -309,11 +310,11 @@ const resolveAccessEvent = async (eventId, resolution) => {
 
     const result = await query(
         `UPDATE access_events
-         SET event_status = $1, resolved_at = NOW()
+         SET event_status = $1, resolved_at = NOW(), resolved_by_account_id = $3
          WHERE event_id = $2
            AND event_status = 'PENDING'
          RETURNING *`,
-        [resolution, eventId]
+        [resolution, eventId, resolvedByAccountId || null]
     );
 
     if (result.rowCount === 0) {
@@ -322,7 +323,21 @@ const resolveAccessEvent = async (eventId, resolution) => {
         throw error;
     }
 
-    return toEventResponse(result.rows[0]);
+    const event = result.rows[0];
+
+    // Fetch numele portarului care a rezolvat
+    if (event.resolved_by_account_id) {
+        const nameResult = await query(
+            `SELECT COALESCE(e.first_name || ' ' || e.last_name, a.email) AS resolved_by_name
+             FROM accounts a
+             LEFT JOIN employees e ON e.employee_id = a.employee_id
+             WHERE a.account_id = $1`,
+            [event.resolved_by_account_id]
+        );
+        event.resolved_by_name = nameResult.rows[0]?.resolved_by_name || null;
+    }
+
+    return toEventResponse(event);
 };
 
 module.exports = {
