@@ -281,10 +281,13 @@ const getPendingEvent = async (eventId) => {
                 e.last_name,
                 e.access_start_time,
                 e.access_end_time,
-                d.name AS division_name
+                d.name AS division_name,
+                COALESCE(re.first_name || ' ' || re.last_name, ra.email) AS resolved_by_name
          FROM access_events ae
          INNER JOIN employees e ON e.employee_id = ae.employee_id
          INNER JOIN divisions d ON d.division_id = e.division_id
+         LEFT JOIN accounts ra ON ra.account_id = ae.resolved_by_account_id
+         LEFT JOIN employees re ON re.employee_id = ra.employee_id
          WHERE ae.event_id = $1`,
         [eventId]
     );
