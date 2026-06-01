@@ -30,6 +30,7 @@ psql $env:DATABASE_URL -f db/migrations/003_add_user_employee_reference.sql
 psql $env:DATABASE_URL -f db/migrations/004_rename_users_to_accounts.sql
 psql $env:DATABASE_URL -f db/migrations/005_add_pending_device_change_support.sql
 psql $env:DATABASE_URL -f db/migrations/006_repair_accounts_schema_for_cloud.sql
+psql $env:DATABASE_URL -f db/migrations/007_add_divisions_created_at.sql
 ```
 
 Initial admin account:
