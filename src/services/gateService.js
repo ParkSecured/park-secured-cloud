@@ -105,7 +105,87 @@ const getGateStatus = async () => {
     };
 };
 
+const validateBluetooth = async (bluetoothCode) => {
+    // Find active employee with this bluetooth code
+    const employeeResult = await query(
+        `SELECT e.employee_id,
+                e.first_name,
+                e.last_name,
+                e.car_number,
+                e.access_start_time,
+                e.access_end_time,
+                e.photo_url
+         FROM employees e
+         WHERE e.bluetooth_code = $1
+           AND e.is_active = true`,
+        [bluetoothCode]
+    );
+
+    const employee = employeeResult.rows[0];
+
+    if (!employee) {
+        return {
+            authorized: false,
+            status: 'DENIED',
+            message: 'Bluetooth code not recognized'
+        };
+    }
+
+    // Check access time window
+    const now = new Date();
+    const currentTime = now.toTimeString().slice(0, 8); // HH:MM:SS
+
+    const withinSchedule =
+        (!employee.access_start_time || currentTime >= employee.access_start_time) &&
+        (!employee.access_end_time   || currentTime <= employee.access_end_time);
+
+    const eventStatus = withinSchedule ? 'ALLOWED' : 'DENIED';
+    const eventType = 'ENTRY';
+
+    // Log the access event
+    await query(
+        `INSERT INTO access_events
+            (employee_id, event_type, event_status, source, notes)
+         VALUES ($1, $2, $3, 'bluetooth', $4)`,
+        [
+            employee.employee_id,
+            eventType,
+            eventStatus,
+            withinSchedule ? null : 'Access denied: outside allowed time window'
+        ]
+    );
+
+    if (!withinSchedule) {
+        return {
+            authorized: false,
+            status: 'DENIED',
+            message: 'Access denied: outside allowed time window',
+            employee: {
+                employeeId: employee.employee_id,
+                firstName: employee.first_name,
+                lastName: employee.last_name,
+                carNumber: employee.car_number,
+                photoUrl: employee.photo_url
+            }
+        };
+    }
+
+    return {
+        authorized: true,
+        status: 'ALLOWED',
+        message: 'Access granted',
+        employee: {
+            employeeId: employee.employee_id,
+            firstName: employee.first_name,
+            lastName: employee.last_name,
+            carNumber: employee.car_number,
+            photoUrl: employee.photo_url
+        }
+    };
+};
+
 module.exports = {
     getGateAccessList,
-    getGateStatus
+    getGateStatus,
+    validateBluetooth
 };
