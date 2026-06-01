@@ -39,7 +39,7 @@ const loginSecure = async (req, res) => {
 };
 
 const validateAccess = async (req, res) => {
-    const { accessSeed } = req.body;
+    const { accessSeed, direction } = req.body;
 
     if (!accessSeed) {
         return res.status(400).json({
@@ -49,7 +49,7 @@ const validateAccess = async (req, res) => {
     }
 
     try {
-        const result = await mobileService.validateAccess({ accessSeed, eventType: eventType || 'ENTRY' });
+        const result = await mobileService.validateAccess({ accessSeed, eventType: direction || 'ENTRY' });
         const statusCode = result.authorized ? 200 : 403;
 
         return res.status(statusCode).json(result);
