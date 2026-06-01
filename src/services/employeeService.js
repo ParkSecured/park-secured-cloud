@@ -65,10 +65,32 @@ const getEmployeeById = async (employeeId, user) => {
     return result.rows[0] ? toEmployeeResponse(result.rows[0]) : null;
 };
 
+const crypto = require('crypto');
+
+function generateBluetoothCode() {
+    const hex = () => crypto.randomBytes(2).toString('hex').toUpperCase();
+    return `BT-${hex()}-${hex()}`;
+}
+
 const createEmployee = async (payload, user) => {
     const divisionId = user.role === ROLES.ADMIN || user.role === ROLES.HR
         ? payload.divisionId
         : user.divisionId;
+
+    // Generăm cod Bluetooth unic dacă nu e trimis din frontend
+    let bluetoothCode = payload.bluetoothCode || null;
+    if (!bluetoothCode) {
+        let attempts = 0;
+        while (attempts < 10) {
+            const candidate = generateBluetoothCode();
+            const exists = await query(
+                `SELECT 1 FROM employees WHERE bluetooth_code = $1`,
+                [candidate]
+            );
+            if (exists.rows.length === 0) { bluetoothCode = candidate; break; }
+            attempts++;
+        }
+    }
 
     const result = await query(
         `INSERT INTO employees (
@@ -85,7 +107,7 @@ const createEmployee = async (payload, user) => {
             payload.photoUrl || null,
             payload.badgeCode || null,
             divisionId,
-            payload.bluetoothCode || null,
+            bluetoothCode,
             payload.carNumber || null,
             payload.accessStartTime || null,
             payload.accessEndTime || null,
