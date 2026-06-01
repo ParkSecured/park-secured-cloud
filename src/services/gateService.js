@@ -105,8 +105,11 @@ const getGateStatus = async () => {
     };
 };
 
+const POLL_INTERVAL_MS = 1000;  // verifică rezolvarea la fiecare 1s
+const POLL_TIMEOUT_MS  = 60000; // timeout după 60s (același ca la accessSeed)
+
 const validateBluetooth = async (bluetoothCode) => {
-    // Find active employee with this bluetooth code
+    // Găsește angajatul activ cu acest cod bluetooth
     const employeeResult = await query(
         `SELECT e.employee_id,
                 e.first_name,
@@ -131,7 +134,15 @@ const validateBluetooth = async (bluetoothCode) => {
         };
     }
 
-    // Check access time window
+    const employeeInfo = {
+        employeeId: employee.employee_id,
+        firstName: employee.first_name,
+        lastName: employee.last_name,
+        carNumber: employee.car_number,
+        photoUrl: employee.photo_url
+    };
+
+    // Verifică intervalul orar
     const now = new Date();
     const currentTime = now.toTimeString().slice(0, 8); // HH:MM:SS
 
@@ -139,48 +150,79 @@ const validateBluetooth = async (bluetoothCode) => {
         (!employee.access_start_time || currentTime >= employee.access_start_time) &&
         (!employee.access_end_time   || currentTime <= employee.access_end_time);
 
-    const eventStatus = withinSchedule ? 'ALLOWED' : 'DENIED';
-    const eventType = 'ENTRY';
+    // Dacă e în interval — acces direct ALLOWED
+    if (withinSchedule) {
+        await query(
+            `INSERT INTO access_events
+                (employee_id, event_type, event_status, source, notes)
+             VALUES ($1, 'ENTRY', 'ALLOWED', 'bluetooth', null)`,
+            [employee.employee_id]
+        );
 
-    // Log the access event
-    await query(
-        `INSERT INTO access_events
-            (employee_id, event_type, event_status, source, notes)
-         VALUES ($1, $2, $3, 'bluetooth', $4)`,
-        [
-            employee.employee_id,
-            eventType,
-            eventStatus,
-            withinSchedule ? null : 'Access denied: outside allowed time window'
-        ]
-    );
-
-    if (!withinSchedule) {
         return {
-            authorized: false,
-            status: 'DENIED',
-            message: 'Access denied: outside allowed time window',
-            employee: {
-                employeeId: employee.employee_id,
-                firstName: employee.first_name,
-                lastName: employee.last_name,
-                carNumber: employee.car_number,
-                photoUrl: employee.photo_url
-            }
+            authorized: true,
+            status: 'ALLOWED',
+            message: 'Access granted',
+            employee: employeeInfo
         };
     }
 
-    return {
-        authorized: true,
-        status: 'ALLOWED',
-        message: 'Access granted',
-        employee: {
-            employeeId: employee.employee_id,
-            firstName: employee.first_name,
-            lastName: employee.last_name,
-            carNumber: employee.car_number,
-            photoUrl: employee.photo_url
+    // În afara intervalului — creează eveniment PENDING și așteaptă portarul
+    const insertResult = await query(
+        `INSERT INTO access_events
+            (employee_id, event_type, event_status, source, notes)
+         VALUES ($1, 'ENTRY', 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
+         RETURNING event_id`,
+        [employee.employee_id]
+    );
+
+    const eventId = insertResult.rows[0].event_id;
+
+    // Polling: așteptăm până când portarul rezolvă evenimentul (ALLOWED/DENIED)
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+    while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+        const pollResult = await query(
+            `SELECT event_status FROM access_events WHERE event_id = $1`,
+            [eventId]
+        );
+
+        const status = pollResult.rows[0]?.event_status;
+
+        if (status === 'ALLOWED') {
+            return {
+                authorized: true,
+                status: 'ALLOWED',
+                message: 'Access granted by guard',
+                employee: employeeInfo
+            };
         }
+
+        if (status === 'DENIED') {
+            return {
+                authorized: false,
+                status: 'DENIED',
+                message: 'Access denied by guard',
+                employee: employeeInfo
+            };
+        }
+
+        // Dacă e încă PENDING, continuăm să așteptăm
+    }
+
+    // Timeout — portarul nu a răspuns în 60s, refuzăm accesul
+    await query(
+        `UPDATE access_events SET event_status = 'DENIED', notes = $1 WHERE event_id = $2`,
+        ['Access denied: guard did not respond in time', eventId]
+    );
+
+    return {
+        authorized: false,
+        status: 'DENIED',
+        message: 'Access denied: guard did not respond in time',
+        employee: employeeInfo
     };
 };
 

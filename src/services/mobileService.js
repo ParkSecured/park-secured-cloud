@@ -10,6 +10,7 @@ const loginSecure = async ({ email, password, platform, deviceIdentifier }) => {
                 a.password_hash,
                 a.role,
                 a.is_active AS account_active,
+                a.must_change_password,
                 a.employee_id,
                 e.first_name,
                 e.last_name,
@@ -86,6 +87,7 @@ const loginSecure = async ({ email, password, platform, deviceIdentifier }) => {
 
     return {
         accessSeed,
+        mustChangePassword: account.must_change_password === true,
         user: {
             accountId: account.account_id,
             employeeId: account.employee_id,
@@ -96,25 +98,79 @@ const loginSecure = async ({ email, password, platform, deviceIdentifier }) => {
     };
 };
 
-const validateAccess = async ({ accessSeed }) => {
+// FIX: destructurăm eventType corect
+const validateAccess = async ({ accessSeed, eventType }) => {
     const result = await accessEventService.validateAccessSeed({
         accessSeed,
-        eventType,
+        eventType: eventType || 'ENTRY',
         gateCode: 'GATE_MAIN'
     });
+
+    if (result.status === 'PENDING') {
+        return {
+            authorized: false,
+            status: 'PENDING',
+            eventId: result.eventId,
+            message: result.message
+        };
+    }
 
     if (!result.success || result.status !== 'ALLOWED') {
         return {
             authorized: false,
+            status: result.status || 'DENIED',
             message: result.message || 'Access denied'
         };
     }
 
     return {
         authorized: true,
+        status: 'ALLOWED',
         name: `${result.employee.firstName} ${result.employee.lastName}`,
         employee: result.employee
     };
+};
+
+const changePassword = async ({ email, currentPassword, newPassword }) => {
+    const accountResult = await query(
+        `SELECT account_id, password_hash, is_active
+         FROM accounts
+         WHERE email = $1`,
+        [email]
+    );
+
+    const account = accountResult.rows[0];
+
+    if (!account || !account.is_active) {
+        const error = new Error('Account not found or inactive');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const passwordMatches = await bcrypt.compare(currentPassword, account.password_hash);
+
+    if (!passwordMatches) {
+        const error = new Error('Parola curentă este incorectă');
+        error.statusCode = 401;
+        throw error;
+    }
+
+    if (newPassword.length < 8) {
+        const error = new Error('Parola nouă trebuie să aibă minim 8 caractere');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    await query(
+        `UPDATE accounts
+         SET password_hash = $1, must_change_password = false
+         WHERE account_id = $2`,
+        [newPasswordHash, account.account_id]
+    );
+
+    return { success: true };
 };
 
 const getMobileSession = async (accessSeed) => {
@@ -251,6 +307,7 @@ const getMonthlyReport = async ({ accessSeed }) => {
 module.exports = {
     loginSecure,
     validateAccess,
+    changePassword,
     getMe,
     getMonthlyReport
 };

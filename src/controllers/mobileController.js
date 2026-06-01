@@ -30,6 +30,7 @@ const loginSecure = async (req, res) => {
             success: true,
             message: 'Autentificare reusita si sesiune unica activata.',
             accessSeed: result.accessSeed,
+            mustChangePassword: result.mustChangePassword,
             isNewDevice: result.isNewDevice,
             user: result.user
         });
@@ -55,6 +56,28 @@ const validateAccess = async (req, res) => {
         return res.status(statusCode).json(result);
     } catch (error) {
         return sendControllerError(res, error, 'Could not validate mobile access');
+    }
+};
+
+const changePassword = async (req, res) => {
+    const { email, currentPassword, newPassword } = req.body;
+
+    if (!email || !currentPassword || !newPassword) {
+        return res.status(400).json({
+            success: false,
+            message: 'email, currentPassword and newPassword are required'
+        });
+    }
+
+    try {
+        await mobileService.changePassword({ email, currentPassword, newPassword });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Parola a fost schimbată cu succes.'
+        });
+    } catch (error) {
+        return sendControllerError(res, error, 'Could not change password');
     }
 };
 
@@ -119,6 +142,7 @@ const getMonthlyReport = async (req, res) => {
 module.exports = {
     loginSecure,
     validateAccess,
+    changePassword,
     getMe,
     getMonthlyReport
 };
