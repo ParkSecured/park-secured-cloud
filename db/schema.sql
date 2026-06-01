@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     division_id INTEGER REFERENCES divisions(division_id) ON DELETE SET NULL,
     employee_id INTEGER,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -67,17 +68,33 @@ CREATE TABLE IF NOT EXISTS access_events (
     employee_id INTEGER NOT NULL REFERENCES employees(employee_id) ON DELETE CASCADE,
     smartphone_id INTEGER REFERENCES smartphones(smartphone_id) ON DELETE SET NULL,
     event_type VARCHAR(30) NOT NULL CHECK (event_type IN ('ENTRY', 'EXIT')),
-    event_status VARCHAR(30) NOT NULL CHECK (event_status IN ('ALLOWED', 'DENIED')),
+    event_status VARCHAR(30) NOT NULL CHECK (event_status IN ('ALLOWED', 'DENIED', 'PENDING')),
     event_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     gate_code VARCHAR(50),
     source VARCHAR(50) NOT NULL DEFAULT 'gate',
-    notes TEXT
+    notes TEXT,
+    resolved_at TIMESTAMPTZ,
+    resolved_by_account_id INTEGER REFERENCES accounts(account_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS device_change_requests (
+    request_id BIGSERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(employee_id) ON DELETE CASCADE,
+    old_device_identifier VARCHAR(255),
+    new_device_identifier VARCHAR(255) NOT NULL,
+    new_platform VARCHAR(20),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'rejected')),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_employees_division_id ON employees(division_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_employee_id ON accounts(employee_id);
 CREATE INDEX IF NOT EXISTS idx_access_events_employee_time ON access_events(employee_id, event_time DESC);
 CREATE INDEX IF NOT EXISTS idx_access_events_time ON access_events(event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_access_events_pending ON access_events(event_status, event_time DESC) WHERE event_status = 'PENDING';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_change_requests_one_pending ON device_change_requests(employee_id) WHERE status = 'pending';
 
 INSERT INTO divisions (name)
 VALUES ('General')

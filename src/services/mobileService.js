@@ -14,7 +14,9 @@ const loginSecure = async ({ email, password, platform, deviceIdentifier }) => {
                 a.employee_id,
                 e.first_name,
                 e.last_name,
-                e.is_active AS employee_active
+                e.is_active AS employee_active,
+                e.access_start_time,
+                e.access_end_time
          FROM accounts a
          INNER JOIN employees e ON e.employee_id = a.employee_id
          WHERE a.email = $1`,
@@ -93,7 +95,9 @@ const loginSecure = async ({ email, password, platform, deviceIdentifier }) => {
             employeeId: account.employee_id,
             email: account.email,
             name: `${account.first_name} ${account.last_name}`,
-            role: account.role
+            role: account.role,
+            accessStartTime: account.access_start_time,
+            accessEndTime: account.access_end_time
         }
     };
 };

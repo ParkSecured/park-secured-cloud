@@ -18,10 +18,10 @@ const createAccessEvent = async (req, res) => {
         });
     }
 
-    if (!['ALLOWED', 'DENIED'].includes(eventStatus)) {
+    if (!['ALLOWED', 'DENIED', 'PENDING'].includes(eventStatus)) {
         return res.status(400).json({
             success: false,
-            message: 'eventStatus must be ALLOWED or DENIED'
+            message: 'eventStatus must be ALLOWED, DENIED or PENDING'
         });
     }
 

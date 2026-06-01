@@ -1,5 +1,49 @@
 const { query } = require('../config/db');
 
+const hardwareStatus = {
+    state: 'Inchisa',
+    activeLed: 'Galben',
+    esp32: 'Conectat',
+    lastSync: new Date().toISOString()
+};
+
+const updateHardwareStatus = ({ hardwareState, hardwareLed }) => {
+    hardwareStatus.state = hardwareState || hardwareStatus.state;
+    hardwareStatus.activeLed = hardwareLed || hardwareStatus.activeLed;
+    hardwareStatus.lastSync = new Date().toISOString();
+
+    return {
+        ...hardwareStatus,
+        commandOpen: hardwareStatus.state === 'Deschisa'
+    };
+};
+
+const getHardwareStatus = async () => {
+    let cloudStatus = null;
+
+    try {
+        cloudStatus = await getGateStatus();
+    } catch {
+        cloudStatus = null;
+    }
+
+    if (cloudStatus?.lastEvent) {
+        const allowed = cloudStatus.lastEvent.eventStatus === 'ALLOWED';
+        return {
+            state: allowed ? 'Deschisa' : 'Inchisa',
+            activeLed: allowed ? 'Verde' : 'Rosu',
+            esp32: hardwareStatus.esp32,
+            lastSync: hardwareStatus.lastSync,
+            commandOpen: allowed
+        };
+    }
+
+    return {
+        ...hardwareStatus,
+        commandOpen: hardwareStatus.state === 'Deschisa'
+    };
+};
+
 // Aceeași funcție robustă din accessEventService — suportă intervale peste miezul nopții
 const isCurrentTimeInAccessWindow = (accessStartTime, accessEndTime) => {
     if (!accessStartTime || !accessEndTime) return true;
@@ -254,5 +298,7 @@ const validateBluetooth = async (bluetoothCode, direction = 'ENTRY') => {
 module.exports = {
     getGateAccessList,
     getGateStatus,
+    getHardwareStatus,
+    updateHardwareStatus,
     validateBluetooth
 };

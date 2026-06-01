@@ -18,6 +18,8 @@ psql $env:DATABASE_URL -f db/migrations/001_add_smartphone_access_seed.sql
 psql $env:DATABASE_URL -f db/migrations/002_add_hr_role.sql
 psql $env:DATABASE_URL -f db/migrations/003_add_user_employee_reference.sql
 psql $env:DATABASE_URL -f db/migrations/004_rename_users_to_accounts.sql
+psql $env:DATABASE_URL -f db/migrations/005_add_pending_device_change_support.sql
+psql $env:DATABASE_URL -f db/migrations/006_repair_accounts_schema_for_cloud.sql
 ```
 
 Initial admin account:
