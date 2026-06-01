@@ -1,5 +1,20 @@
 const { query } = require('../config/db');
 
+// Aceeași funcție robustă din accessEventService — suportă intervale peste miezul nopții
+const isCurrentTimeInAccessWindow = (accessStartTime, accessEndTime) => {
+    if (!accessStartTime || !accessEndTime) return true;
+    const now = new Date();
+    const currentSeconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
+    const toSeconds = (t) => {
+        const [h, m, s = '0'] = String(t).split(':');
+        return (Number(h) * 3600) + (Number(m) * 60) + Number(s);
+    };
+    const start = toSeconds(accessStartTime);
+    const end = toSeconds(accessEndTime);
+    if (start <= end) return currentSeconds >= start && currentSeconds <= end;
+    return currentSeconds >= start || currentSeconds <= end;
+};
+
 const toGateAccessEntry = (row) => ({
     employeeId: row.employee_id,
     firstName: row.first_name,
@@ -142,13 +157,11 @@ const validateBluetooth = async (bluetoothCode) => {
         photoUrl: employee.photo_url
     };
 
-    // Verifică intervalul orar
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 8); // HH:MM:SS
-
-    const withinSchedule =
-        (!employee.access_start_time || currentTime >= employee.access_start_time) &&
-        (!employee.access_end_time   || currentTime <= employee.access_end_time);
+    // Verifică intervalul orar folosind comparare numerică (nu string)
+    const withinSchedule = isCurrentTimeInAccessWindow(
+        employee.access_start_time,
+        employee.access_end_time
+    );
 
     // Dacă e în interval — acces direct ALLOWED
     if (withinSchedule) {
@@ -167,33 +180,16 @@ const validateBluetooth = async (bluetoothCode) => {
         };
     }
 
-    // În afara intervalului — verifică dacă există deja un PENDING activ pentru același angajat
-    // (BLE-ul poate trimite codul de mai multe ori, evităm duplicate)
-    const existingPending = await query(
-        `SELECT event_id FROM access_events
-         WHERE employee_id = $1
-           AND event_status = 'PENDING'
-           AND source = 'bluetooth'
-           AND event_time > NOW() - INTERVAL '2 minutes'
-         ORDER BY event_time DESC
-         LIMIT 1`,
+    // În afara intervalului — creează eveniment PENDING și așteaptă portarul
+    const insertResult = await query(
+        `INSERT INTO access_events
+            (employee_id, event_type, event_status, source, notes)
+         VALUES ($1, 'ENTRY', 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
+         RETURNING event_id`,
         [employee.employee_id]
     );
 
-    let eventId;
-    if (existingPending.rows.length > 0) {
-        // Refolosim evenimentul PENDING existent — nu creăm duplicat
-        eventId = existingPending.rows[0].event_id;
-    } else {
-        const insertResult = await query(
-            `INSERT INTO access_events
-                (employee_id, event_type, event_status, source, notes)
-             VALUES ($1, 'ENTRY', 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
-             RETURNING event_id`,
-            [employee.employee_id]
-        );
-        eventId = insertResult.rows[0].event_id;
-    }
+    const eventId = insertResult.rows[0].event_id;
 
     // Polling: așteptăm până când portarul rezolvă evenimentul (ALLOWED/DENIED)
     const deadline = Date.now() + POLL_TIMEOUT_MS;
