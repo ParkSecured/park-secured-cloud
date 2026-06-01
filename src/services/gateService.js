@@ -167,16 +167,33 @@ const validateBluetooth = async (bluetoothCode) => {
         };
     }
 
-    // În afara intervalului — creează eveniment PENDING și așteaptă portarul
-    const insertResult = await query(
-        `INSERT INTO access_events
-            (employee_id, event_type, event_status, source, notes)
-         VALUES ($1, 'ENTRY', 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
-         RETURNING event_id`,
+    // În afara intervalului — verifică dacă există deja un PENDING activ pentru același angajat
+    // (BLE-ul poate trimite codul de mai multe ori, evităm duplicate)
+    const existingPending = await query(
+        `SELECT event_id FROM access_events
+         WHERE employee_id = $1
+           AND event_status = 'PENDING'
+           AND source = 'bluetooth'
+           AND event_time > NOW() - INTERVAL '2 minutes'
+         ORDER BY event_time DESC
+         LIMIT 1`,
         [employee.employee_id]
     );
 
-    const eventId = insertResult.rows[0].event_id;
+    let eventId;
+    if (existingPending.rows.length > 0) {
+        // Refolosim evenimentul PENDING existent — nu creăm duplicat
+        eventId = existingPending.rows[0].event_id;
+    } else {
+        const insertResult = await query(
+            `INSERT INTO access_events
+                (employee_id, event_type, event_status, source, notes)
+             VALUES ($1, 'ENTRY', 'PENDING', 'bluetooth', 'Access outside allowed time window — awaiting guard decision')
+             RETURNING event_id`,
+            [employee.employee_id]
+        );
+        eventId = insertResult.rows[0].event_id;
+    }
 
     // Polling: așteptăm până când portarul rezolvă evenimentul (ALLOWED/DENIED)
     const deadline = Date.now() + POLL_TIMEOUT_MS;
