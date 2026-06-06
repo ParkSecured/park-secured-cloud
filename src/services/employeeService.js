@@ -14,7 +14,7 @@ const toEmployeeResponse = (employee) => ({
     carNumber: employee.car_number,
     accessStartTime: employee.access_start_time,
     accessEndTime: employee.access_end_time,
-    isActive: employee.is_active,
+    isActive: employee.account_is_active ?? true,
     grantedByAccountId: employee.granted_by_account_id,
     createdAt: employee.created_at,
     updatedAt: employee.updated_at
@@ -37,9 +37,10 @@ const getDivisionFilter = (user, firstParamIndex = 1) => {
 const getEmployees = async (user) => {
     const filter = getDivisionFilter(user);
     const result = await query(
-        `SELECT e.*, d.name AS division_name
+        `SELECT e.*, d.name AS division_name, a.is_active AS account_is_active
          FROM employees e
          INNER JOIN divisions d ON d.division_id = e.division_id
+         LEFT JOIN accounts a ON a.employee_id = e.employee_id
          ${filter.clause}
          ORDER BY e.employee_id DESC`,
         filter.params
@@ -55,9 +56,10 @@ const getEmployeeById = async (employeeId, user) => {
         : 'WHERE e.employee_id = $1';
 
     const result = await query(
-        `SELECT e.*, d.name AS division_name
+        `SELECT e.*, d.name AS division_name, a.is_active AS account_is_active
          FROM employees e
          INNER JOIN divisions d ON d.division_id = e.division_id
+         LEFT JOIN accounts a ON a.employee_id = e.employee_id
          ${whereClause}`,
         [employeeId, ...filter.params]
     );
@@ -96,9 +98,9 @@ const createEmployee = async (payload, user) => {
         `INSERT INTO employees (
             first_name, last_name, cnp, photo_url, badge_code, division_id,
             bluetooth_code, car_number, access_start_time, access_end_time,
-            is_active, granted_by_account_id
+            granted_by_account_id
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, true), $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
             payload.firstName,
@@ -111,7 +113,6 @@ const createEmployee = async (payload, user) => {
             payload.carNumber || null,
             payload.accessStartTime || null,
             payload.accessEndTime || null,
-            payload.isActive,
             user.accountId
         ]
     );
@@ -142,9 +143,8 @@ const updateEmployee = async (employeeId, payload, user) => {
              car_number = $8,
              access_start_time = $9,
              access_end_time = $10,
-             is_active = $11,
              updated_at = NOW()
-         WHERE employee_id = $12`,
+         WHERE employee_id = $11`,
         [
             payload.firstName || existingEmployee.firstName,
             payload.lastName || existingEmployee.lastName,
@@ -156,10 +156,17 @@ const updateEmployee = async (employeeId, payload, user) => {
             payload.carNumber !== undefined ? payload.carNumber : existingEmployee.carNumber,
             payload.accessStartTime !== undefined ? payload.accessStartTime : existingEmployee.accessStartTime,
             payload.accessEndTime !== undefined ? payload.accessEndTime : existingEmployee.accessEndTime,
-            payload.isActive !== undefined ? payload.isActive : existingEmployee.isActive,
             employeeId
         ]
     );
+
+    // actualizează is_active în accounts dacă e trimis
+    if (payload.isActive !== undefined) {
+        await query(
+            `UPDATE accounts SET is_active = $1 WHERE employee_id = $2`,
+            [payload.isActive, employeeId]
+        );
+    }
 
     return getEmployeeById(employeeId, user);
 };
@@ -172,9 +179,7 @@ const toggleEmployeeAccess = async (employeeId, isActive, user) => {
     }
 
     await query(
-        `UPDATE employees
-         SET is_active = $1, updated_at = NOW()
-         WHERE employee_id = $2`,
+        `UPDATE accounts SET is_active = $1 WHERE employee_id = $2`,
         [isActive, employeeId]
     );
 

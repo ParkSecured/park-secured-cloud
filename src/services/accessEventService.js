@@ -108,11 +108,12 @@ const validateAccessSeed = async ({ accessSeed, eventType, gateCode }) => {
                 e.first_name,
                 e.last_name,
                 e.car_number,
-                e.is_active,
+                a.is_active,
                 e.access_start_time,
                 e.access_end_time
          FROM smartphones s
          INNER JOIN employees e ON e.employee_id = s.employee_id
+         LEFT JOIN accounts a ON a.employee_id = e.employee_id
          WHERE s.access_seed = $1`,
         [accessSeed]
     );

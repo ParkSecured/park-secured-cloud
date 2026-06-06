@@ -101,7 +101,7 @@ const getGateAccessList = async () => {
          FROM employees e
          INNER JOIN divisions d ON d.division_id = e.division_id
          LEFT JOIN smartphones s ON s.employee_id = e.employee_id AND s.is_trusted = true
-         WHERE e.is_active = true
+         INNER JOIN accounts a ON a.employee_id = e.employee_id AND a.is_active = true
          ORDER BY e.employee_id ASC`
     );
 
@@ -189,8 +189,8 @@ const validateBluetooth = async (bluetoothCode, direction = 'ENTRY') => {
                 e.access_end_time,
                 e.photo_url
          FROM employees e
-         WHERE e.bluetooth_code = $1
-           AND e.is_active = true`,
+         INNER JOIN accounts a ON a.employee_id = e.employee_id AND a.is_active = true
+         WHERE e.bluetooth_code = $1`,
         [actualCode]
     );
 
