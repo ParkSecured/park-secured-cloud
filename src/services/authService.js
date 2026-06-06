@@ -13,9 +13,11 @@ const buildUserResponse = (user) => ({
 
 const login = async ({ email, password }) => {
     const result = await query(
-        `SELECT account_id, email, password_hash, role, division_id, employee_id, is_active
-         FROM accounts
-         WHERE email = $1`,
+        `SELECT a.account_id, a.email, a.password_hash, a.role, a.employee_id, a.is_active,
+                e.division_id
+         FROM accounts a
+         LEFT JOIN employees e ON e.employee_id = a.employee_id
+         WHERE a.email = $1`,
         [email]
     );
 

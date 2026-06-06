@@ -49,14 +49,16 @@ const ensureEmployeeCanBeLinked = async (employeeId, currentAccountId = null) =>
 
 const getUsers = async (user) => {
     const whereClause = user.role === ROLES.HR
-        ? `WHERE role NOT IN ('admin', 'hr')`
+        ? `WHERE a.role NOT IN ('admin', 'hr')`
         : '';
 
     const result = await query(
-        `SELECT account_id, email, role, division_id, employee_id, is_active, created_at
-         FROM accounts
+        `SELECT a.account_id, a.email, a.role, a.employee_id, a.is_active, a.created_at,
+                e.division_id
+         FROM accounts a
+         LEFT JOIN employees e ON e.employee_id = a.employee_id
          ${whereClause}
-         ORDER BY created_at DESC`
+         ORDER BY a.created_at DESC`
     );
 
     return result.rows.map(toAccountResponse);
@@ -67,20 +69,35 @@ const createUser = async ({ email, password, role, divisionId, employeeId, isAct
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await query(
-        `INSERT INTO accounts (email, password_hash, role, division_id, employee_id, is_active, must_change_password)
-         VALUES ($1, $2, $3, $4, $5, $6, true)
-         RETURNING account_id, email, role, division_id, employee_id, is_active, created_at`,
-        [email, passwordHash, role, divisionId || null, employeeId || null, isActive]
+        `INSERT INTO accounts (email, password_hash, role, employee_id, is_active, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, true)
+         RETURNING account_id, email, role, employee_id, is_active, created_at`,
+        [email, passwordHash, role, employeeId || null, isActive]
     );
 
-    return toAccountResponse(result.rows[0]);
+    const row = result.rows[0];
+
+    // dacă s-a specificat un employeeId, ia division_id din employees
+    if (row.employee_id) {
+        const empResult = await query(
+            `SELECT division_id FROM employees WHERE employee_id = $1`,
+            [row.employee_id]
+        );
+        row.division_id = empResult.rows[0]?.division_id ?? null;
+    } else {
+        row.division_id = null;
+    }
+
+    return toAccountResponse(row);
 };
 
 const getUserById = async (accountId) => {
     const result = await query(
-        `SELECT account_id, email, role, division_id, employee_id, is_active, created_at
-         FROM accounts
-         WHERE account_id = $1`,
+        `SELECT a.account_id, a.email, a.role, a.employee_id, a.is_active, a.created_at,
+                e.division_id
+         FROM accounts a
+         LEFT JOIN employees e ON e.employee_id = a.employee_id
+         WHERE a.account_id = $1`,
         [accountId]
     );
 
@@ -107,34 +124,48 @@ const updateUser = async (accountId, payload) => {
          SET email = $1,
              password_hash = COALESCE($2, password_hash),
              role = $3,
-             division_id = $4,
-             employee_id = $5,
-             is_active = $6
-         WHERE account_id = $7
-         RETURNING account_id, email, role, division_id, employee_id, is_active, created_at`,
+             employee_id = $4,
+             is_active = $5
+         WHERE account_id = $6
+         RETURNING account_id, email, role, employee_id, is_active, created_at`,
         [
             payload.email !== undefined ? payload.email : existingUser.email,
             passwordHash,
             payload.role !== undefined ? payload.role : existingUser.role,
-            payload.divisionId !== undefined ? payload.divisionId : existingUser.divisionId,
             payload.employeeId !== undefined ? payload.employeeId : existingUser.employeeId,
             payload.isActive !== undefined ? payload.isActive : existingUser.isActive,
             accountId
         ]
     );
 
-    return toAccountResponse(result.rows[0]);
+    const row = result.rows[0];
+
+    if (row.employee_id) {
+        const empResult = await query(
+            `SELECT division_id FROM employees WHERE employee_id = $1`,
+            [row.employee_id]
+        );
+        row.division_id = empResult.rows[0]?.division_id ?? null;
+    } else {
+        row.division_id = null;
+    }
+
+    return toAccountResponse(row);
 };
 
 const deleteUser = async (accountId) => {
     const result = await query(
         `DELETE FROM accounts
          WHERE account_id = $1
-         RETURNING account_id, email, role, division_id, employee_id, is_active, created_at`,
+         RETURNING account_id, email, role, employee_id, is_active, created_at`,
         [accountId]
     );
 
-    return result.rows[0] ? toAccountResponse(result.rows[0]) : null;
+    if (!result.rows[0]) return null;
+
+    // division_id nu mai e în accounts, returnăm null pentru că angajatul poate fi deja sters
+    result.rows[0].division_id = null;
+    return toAccountResponse(result.rows[0]);
 };
 
 module.exports = {
