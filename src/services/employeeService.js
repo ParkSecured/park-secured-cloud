@@ -16,6 +16,7 @@ const toEmployeeResponse = (employee) => ({
     accessEndTime: employee.access_end_time,
     isActive: employee.account_is_active ?? true,
     grantedByAccountId: employee.granted_by_account_id,
+    hasSmartphone: employee.has_smartphone ?? false,
     createdAt: employee.created_at,
     updatedAt: employee.updated_at
 });
@@ -37,7 +38,8 @@ const getDivisionFilter = (user, firstParamIndex = 1) => {
 const getEmployees = async (user) => {
     const filter = getDivisionFilter(user);
     const result = await query(
-        `SELECT e.*, d.name AS division_name, a.is_active AS account_is_active
+        `SELECT e.*, d.name AS division_name, a.is_active AS account_is_active,
+              EXISTS(SELECT 1 FROM smartphones s WHERE s.employee_id = e.employee_id) AS has_smartphone
          FROM employees e
          INNER JOIN divisions d ON d.division_id = e.division_id
          LEFT JOIN accounts a ON a.employee_id = e.employee_id
@@ -56,7 +58,8 @@ const getEmployeeById = async (employeeId, user) => {
         : 'WHERE e.employee_id = $1';
 
     const result = await query(
-        `SELECT e.*, d.name AS division_name, a.is_active AS account_is_active
+        `SELECT e.*, d.name AS division_name, a.is_active AS account_is_active,
+              EXISTS(SELECT 1 FROM smartphones s WHERE s.employee_id = e.employee_id) AS has_smartphone
          FROM employees e
          INNER JOIN divisions d ON d.division_id = e.division_id
          LEFT JOIN accounts a ON a.employee_id = e.employee_id
