@@ -19,25 +19,6 @@ const updateHardwareStatus = ({ hardwareState, hardwareLed }) => {
 };
 
 const getHardwareStatus = async () => {
-    let cloudStatus = null;
-
-    try {
-        cloudStatus = await getGateStatus();
-    } catch {
-        cloudStatus = null;
-    }
-
-    if (cloudStatus?.lastEvent) {
-        const allowed = cloudStatus.lastEvent.eventStatus === 'ALLOWED';
-        return {
-            state: allowed ? 'Deschisa' : 'Inchisa',
-            activeLed: allowed ? 'Verde' : 'Rosu',
-            esp32: hardwareStatus.esp32,
-            lastSync: hardwareStatus.lastSync,
-            commandOpen: allowed
-        };
-    }
-
     return {
         ...hardwareStatus,
         commandOpen: hardwareStatus.state === 'Deschisa'
