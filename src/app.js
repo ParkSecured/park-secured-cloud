@@ -48,4 +48,11 @@ app.use('/api', gateRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', testRoutes);
 
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ success: false, message: 'JSON invalid în request.' });
+    }
+    next(err);
+});
+
 module.exports = app;
