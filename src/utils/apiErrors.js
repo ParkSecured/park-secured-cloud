@@ -41,6 +41,7 @@ const getPgErrorResponse = (error) => {
 };
 
 const sendControllerError = (res, error, fallbackMessage) => {
+     console.error(`[ERROR] ${fallbackMessage}:`, error.message, '| constraint:', error.constraint);
     if (error.statusCode) {
         return res.status(error.statusCode).json({
             success: false,
